@@ -46,7 +46,13 @@ function rangeMaxLimiter(zoomPanOptions, newMax) {
 	if (zoomPanOptions.scaleAxes && zoomPanOptions.rangeMax &&
 			!helpers.isNullOrUndef(zoomPanOptions.rangeMax[zoomPanOptions.scaleAxes])) {
 		var rangeMax = zoomPanOptions.rangeMax[zoomPanOptions.scaleAxes];
-		if (newMax > rangeMax) {
+
+		if (typeof rangeMax === 'object' && newMax.isAfter && newMax.isAfter(moment(rangeMax))) {
+			//prevent accidental alterations to zoom rangeMax if is moment object
+			newMax = JSON.parse(JSON.stringify(rangeMax));
+			newMax._d = new Date(rangeMax._d);
+		}
+		else if (newMax > rangeMax) {
 			newMax = rangeMax;
 		}
 	}
@@ -57,7 +63,13 @@ function rangeMinLimiter(zoomPanOptions, newMin) {
 	if (zoomPanOptions.scaleAxes && zoomPanOptions.rangeMin &&
 			!helpers.isNullOrUndef(zoomPanOptions.rangeMin[zoomPanOptions.scaleAxes])) {
 		var rangeMin = zoomPanOptions.rangeMin[zoomPanOptions.scaleAxes];
-		if (newMin < rangeMin) {
+
+		if (typeof rangeMin === 'object' && newMin.isBefore && newMin.isBefore(moment(rangeMin))) {
+			//prevent accidental alterations to zoom rangeMin if is moment object
+			newMin = JSON.parse(JSON.stringify(rangeMin));
+			newMin._d = new Date(rangeMin._d);
+		}
+		else if (newMin < rangeMin) {
 			newMin = rangeMin;
 		}
 	}
@@ -160,6 +172,8 @@ function doZoom(chartInstance, zoom, center) {
 	}
 
 	var zoomOptions = chartInstance.options.zoom;
+
+	debugger;
 
 	if (zoomOptions && helpers.getValueOrDefault(zoomOptions.enabled, defaultOptions.zoom.enabled)) {
 		// Do the zoom here
@@ -285,6 +299,19 @@ var zoomPlugin = {
 	afterInit: function(chartInstance) {
 		helpers.each(chartInstance.scales, function(scale) {
 			scale.originalOptions = JSON.parse(JSON.stringify(scale.options));
+
+			//reconstruct the date objects of min and max for time scale
+			//the clone operation above transforms the dates into strings, causing problems
+			//operation assumes the dates are moment objects
+			if (scale.options.time) {
+				if (scale.options.time.min) {
+					scale.originalOptions.time.min._d = new Date(scale.options.time.min._d);
+				}
+
+				if (scale.options.time.max) {
+					scale.originalOptions.time.max._d = new Date(scale.options.time.max._d);
+				}
+			}
 		});
 
 		chartInstance.resetZoom = function() {
@@ -293,13 +320,30 @@ var zoomPlugin = {
 				var tickOptions = scale.options.ticks;
 
 				if (timeOptions) {
-					delete timeOptions.min;
-					delete timeOptions.max;
+					/*
+						delete timeOptions.min;
+						delete timeOptions.max;
+
+						for some reason, relying on the configMerge to replace the min/max with the original values doesn't work properly
+						when updated, chart.js ignores the min and max values for the time scale, breaking the user-defined scale limits
+						...but replacing the values manually like this works, despite the end result for scale.options being identical either way
+
+						operation assumes the dates are moment objects
+					*/
+					scale.options.time.min._d = new Date(scale.originalOptions.time.min._d);
+					scale.options.time.max._d = new Date(scale.originalOptions.time.max._d);
 				}
 
 				if (tickOptions) {
-					delete tickOptions.min;
-					delete tickOptions.max;
+					/*
+						delete tickOptions.min;
+						delete tickOptions.max;
+
+						Same problem as above - post-update graph by delete-replace method ignores the min/max breaking user defined scale limits
+						...but replacing the values manually liket his works, despite once again the end result for scale.options being identical either way
+					*/
+					scale.options.ticks.min = scale.originalOptions.ticks.min;
+					scale.options.ticks.max = scale.originalOptions.ticks.max;
 				}
 
 				scale.options = helpers.configMerge(scale.options, scale.originalOptions);
