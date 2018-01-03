@@ -184,9 +184,7 @@ function doZoom(chartInstance, zoom, center) {
 	}
 
 	var zoomOptions = chartInstance.options.zoom;
-
-	debugger;
-
+	
 	if (zoomOptions && helpers.getValueOrDefault(zoomOptions.enabled, defaultOptions.zoom.enabled)) {
 		// Do the zoom here
 		var zoomMode = helpers.getValueOrDefault(chartInstance.options.zoom.mode, defaultOptions.zoom.mode);
